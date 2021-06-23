@@ -1,0 +1,36 @@
+{% extends 'ui/base.html' %}
+
+{% comment %} designed to work with bootstrap 5 {% endcomment %}
+
+{% block inner_content %}
+
+            <h5 class="card-title text-center">Sign Up</h5>
+            <form class="form-signin" action="{{ code.get_link }}", method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="code" value="{{code}}">
+
+              <div class="form-label-group">
+                <input type="text" id="inputEmail" name='username' class="form-control" placeholder="Username" required autofocus>
+                <label for="inputEmail">Username</label>
+              </div>
+
+              <div class="form-label-group">
+                <input type="password" id="inputPassword" name='p1' class="form-control" placeholder="Password" required>
+                <label for="inputPassword">Password</label>
+              </div>
+              <div class="form-label-group">
+                <input type="password" id="inputPassword2" name='p2' class="form-control" placeholder="Password" required>
+                <label for="inputPassword2">Confirm Password</label>
+              </div>
+            <div>
+              {{ message }}
+              </div>
+              
+
+              <button class="btn btn-lg btn-primary btn-block text-uppercase" type="submit">Sign in</button>
+
+              
+              
+            </form>
+
+{% endblock %}

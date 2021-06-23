@@ -1,0 +1,52 @@
+
+{% extends 'ui/base.html' %}
+
+
+{% block inner_content %}
+    <div class='text-center'>
+        <h5 class="card-title text-center">Create Code</h5>
+            <form class="form-signin" action="{% url 'ui:codes' %}", method="POST">
+                {% csrf_token %}
+                <div class="form-label-group">
+                    <input type="number" id="hoursInput" name='hours' class="form-control" value="2" required autofocus>
+                    <label for="hours">Hours Before Code Expires</label>
+                </div>
+
+                <div>
+                    <label for="once">One Time Use?&nbsp;&nbsp;</label><input type="checkbox" id="onceCheckbox" name='once'>
+                </div>
+                
+            <button class="btn btn-lg btn-primary btn-block text-uppercase" type="submit">Create Code</button>
+              
+        </form>
+    </div>
+    <hr>
+    <h5>Access Codes</h5>
+    <table class='table table-striped'>
+        <thead>
+            <th>Link</th>
+            <th>Expiration (UTC)</th>
+        <thead>
+        <tbody>
+            {% for code in codes %}
+                <tr>
+                    <td>{{ code.get_link }}</td>
+                    <td>{{code.get_exp_str}}</td>
+                <tr>
+            {% endfor %}
+
+        </tbody>
+    </table>
+
+    
+    <form class="form-signin" action="{% url 'ui:clear_codes' %}", method="POST">
+        {% csrf_token %}
+        <button class="btn btn-lg btn-danger btn-block text-uppercase" type="submit">Delete All Expired Codes</button>
+            
+    </form>
+    <small>To delete other valid codes, please use the admin panel</small>
+
+    
+
+
+{% endblock %}
