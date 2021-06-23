@@ -4,7 +4,7 @@ from api.models import *
 import json
 import time
 from django.contrib.auth.models import User
-
+import datetime
 
 
 class Command(BaseCommand):
@@ -18,11 +18,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         live_hours = options['hours']
         one_time = options['one_time']
-        assert live_hours
+        assert isinstance(live_hours, int)
+        print(live_hours)
         expiration_timestamp = int(time.time()) + int(live_hours*60*60)
+        print(time.time()-expiration_timestamp)
 
         activaton_code = ActivationCode.objects.create(
-            expiration_timestamp=expiration_timestamp, one_time_use=one_time
+                expiration_timestamp=expiration_timestamp, one_time_use=one_time
             )
         
 

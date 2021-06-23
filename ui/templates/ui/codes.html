@@ -9,7 +9,7 @@
                 {% csrf_token %}
                 <div class="form-label-group">
                     <input type="number" id="hoursInput" name='hours' class="form-control" value="2" required autofocus>
-                    <label for="hours">Hours Before Code Expires</label>
+                    <label min='1' max='8760' for="hours">Hours Before Code Expires</label>
                 </div>
 
                 <div>
@@ -30,9 +30,9 @@
         <tbody>
             {% for code in codes %}
                 <tr>
-                    <td>{{ code.get_link }}</td>
+                    <td>{{code.get_link}}</td>
                     <td>{{code.get_exp_str}}</td>
-                <tr>
+                </tr>
             {% endfor %}
 
         </tbody>
@@ -44,7 +44,7 @@
         <button class="btn btn-lg btn-danger btn-block text-uppercase" type="submit">Delete All Expired Codes</button>
             
     </form>
-    <small>To delete other valid codes, please use the admin panel</small>
+    <small>To delete other valid codes, please use the <a href="{% url 'admin:index' %}">admin panel</a></small>
 
     
 

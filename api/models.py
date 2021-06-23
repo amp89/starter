@@ -24,6 +24,9 @@ class ActivationCode(models.Model):
         if not self.code:
             self.code = str(uuid.uuid4()).upper().replace("-","")
 
+        if len(self.code) < 20:
+            raise Exception("Invalid Code Length")
+
         super(__class__,self).save(*args, **kwargs)
 
     def check_validity(self):
@@ -42,12 +45,19 @@ class ActivationCode(models.Model):
         return url
         
     def get_exp_str(self):
-        dt = datetime.datetime.fromtimestamp(self.expiration_timestamp)
-        if not self.one_time_use:
-            return f"{dt.month}/{dt.day}/{dt.year} {dt.hour}:{dt.minute}"
-        else:
-            return f"{dt.month}/{dt.day}/{dt.year} {dt.hour}:{dt.minute} ONE TIME USE ONLY"
+        try:
+            dt = datetime.datetime.fromtimestamp(self.expiration_timestamp)
+        except ValueError:
+            self.force_invalidate()
+            dt = datetime.datetime.fromtimestamp(self.expiration_timestamp)
 
+        if not self.one_time_use and self.expiration_timestamp > time.time():
+            # return f"{dt.month}/{dt.day}/{dt.year} {dt.hour}:{dt.minute:.f2}"
+            return str(datetime.datetime.strftime(dt,"%Y/%m/%d %H:%M"))
+        elif self.one_time_use and self.expiration_timestamp:
+            return str(datetime.datetime.strftime(dt,"%Y/%m/%d %H:%M")) + " ONE TIME USE ONLY"
+        else:
+            return "Token Expired!"
 
 
     def __str__(self):

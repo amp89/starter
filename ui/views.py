@@ -116,9 +116,14 @@ class PasswordView(LoginRequiredMixin, View):
         return render(request, 'ui/password.html')
 
     def post(self, request):
-
+        old_pwd = request.POST['p']
         pwd = request.POST['p1']
         pwd_conf = request.POST['p2']
+
+        this_user = authenticate(request, username=request.user.username, password=old_pwd)
+        if not this_user:
+            messages.error(request, "Your old password was incorrect")
+            return render(request, 'ui/password.html')
 
         try:
             validators.validate_password(password=pwd, user=User)
@@ -130,17 +135,19 @@ class PasswordView(LoginRequiredMixin, View):
             messages.error(request, 'Passwords must match! Please Try again')
             return render(request, 'ui/password.html')
 
-        request.user.set_password(pwd)
-        request.user.save()
+        this_user.set_password(pwd)
+        this_user.save()
         
         logout(request)
 
-        new_user = authenticate(request, username=request.user.username.lower(), password=pwd)
+        new_p_user = authenticate(request, username=this_user.username.lower(), password=pwd)
 
-        if new_user is not None:
-            login(request, new_user)
-            return redirect("ui:login")
+        if new_p_user is not None:
+            login(request, new_p_user)
+            messages.success(request, 'Your password has been changed!')
+            return redirect("ui:home")
         else:
+            messages.error(request, 'Unable to change password. Please login again.')
             return redirect("ui:login")
 
 class LogoutView(LoginRequiredMixin, View):
@@ -151,7 +158,8 @@ class LogoutView(LoginRequiredMixin, View):
 class ActivationCodesView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.is_superuser:
-            codes = ActivationCode.objects.all().order_by("-expiration_timestamp")
+            # codes = ActivationCode.objects.all().order_by("-expiration_timestamp")
+            codes = ActivationCode.objects.all().order_by("-pk")
             return render(request, "ui/codes.html", {"codes":codes})
         else:
             return HttpResponseForbidden()
@@ -161,6 +169,9 @@ class ActivationCodesView(LoginRequiredMixin, View):
             return HttpResponseForbidden()
 
         hours = int(request.POST['hours'])
+        if hours < 1 or hours > 8760:
+            messages.error(request, "Hours must be between 1 and 8760")
+            return redirect("ui:codes")
         is_once = True if request.POST.get('once') else False
         call_command('make_code', hours=hours, one_time=is_once)
         messages.success(request,"Code Created!")
