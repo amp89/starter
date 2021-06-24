@@ -1,26 +1,30 @@
 from django.shortcuts import render
-from django.shortcuts import reverse
 from django.shortcuts import redirect
-from api.models import ActivationCode
-from django.http import HttpResponseBadRequest
-from django.http import HttpResponseForbidden
+from activation_code_api.models import ActivationCode
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import User
-import django.contrib.auth.password_validation as validators
 from django.contrib.auth import authenticate, login, logout
 from django.core.management import call_command
-
+from logger import logger
 from django.contrib import messages
-class HomeView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        return render(request, 'ui/index.html')
+from activation_code_api.modules.helpers import Helpers
+from activation_code_api.exceptions import InvalidCodeException
+from activation_code_api.exceptions import ExpiredCodeException
+from activation_code_api.exceptions import PasswordDoesNotMatchException
+from activation_code_api.exceptions import UserExistsException
+from view_classes import SuperUserView
 
-class ExampleLoginRequiredView(LoginRequiredMixin, View):
+class HomeView(LoginRequiredMixin, View):
+    '''
+    Home Page View
+    '''
     def get(self, request, *args, **kwargs):
-        return HttpResponse("hi")
+        return render(request, 'ui/home.html')
 
 class LoginView(View):
+    '''
+    Login page view
+    '''
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             return redirect("ui:home")
@@ -29,7 +33,6 @@ class LoginView(View):
     def post(self, request):        
         username = request.POST['u'].lower()
         pwd = request.POST['p']
-        
         user = authenticate(request, username=username, password=pwd)
 
         if user is not None:
@@ -40,24 +43,25 @@ class LoginView(View):
             return render(request, 'ui/login.html')
 
 class SignupView(View):
+    '''
+    Signup View (requires access code in URL)
+    '''
     def get(self, request, code):
         if request.user.is_authenticated:
-            return redirect("ui:home")
-        
+            messages.error(request, "You are already logged in.")
+            return redirect("ui:home")            
         try:
-            activation_code = ActivationCode.objects.get(code=code)
-        except ActivationCode.DoesNotExist:
-            messages.error(request, 'Activation Code Incorrect')
-            print(code)
-            return render(request, 'ui/login.html')
-
-        if activation_code.check_validity() == False:
-            messages.error(request, 'Activation Code Has Expired')
-            return render(request, 'ui/login.html')
-        else:                
+            valid = Helpers.check_activation_code(code=code)
+            assert valid == True
             return render(request, 'ui/signup.html', {'code':code})
-        
-
+        except InvalidCodeException:
+            messages.error(request, 'Activation Code Incorrect')
+            logger.info(f"Invalid code attempt: {code}")
+            return render(request, 'ui/login.html')
+        except ExpiredCodeException:
+            messages.error(request, 'Activation Code Has Expired')
+            logger.info(f"Expired code attempt: {code}")
+            return render(request, 'ui/login.html')
 
     def post(self, request, code):
         code = request.POST['code']
@@ -65,53 +69,41 @@ class SignupView(View):
         pwd = request.POST['p1']
         pwd_conf = request.POST['p2']
 
-        # TODO abstract some of this stuff pls.. move things to other scripts
         try:
-            activation_code = ActivationCode.objects.get(code=code)
-        except:
-            messages.error(request, 'Activation Code Incorrect')
+            new_user = Helpers.create_new_user_from_activation_code(
+                code=code,
+                username=username,
+                pwd=pwd,
+                pwd_conf=pwd_conf,
+            )
+            login(request, new_user)
+            messages.success(request, f"Thank you for signing up, {new_user.username}!")
+            return redirect("ui:home")
             return render(request, 'ui/login.html')
-
-        if activation_code.check_validity() == False:
+        except InvalidCodeException:
             messages.error(request, 'Activation Code Incorrect')
+            logger.error(f"Invalid code attempt on POST: {code}")
             return render(request, 'ui/login.html')
-        
-
-        try:
-            validators.validate_password(password=pwd, user=User)
+        except ExpiredCodeException:
+            messages.error(request, 'Activation Code Expired')
+            return render(request, 'ui/login.html')
+        except UserExistsException:
+            messages.error(request, "This user already exists! Either login if you already have an account, or try again with a different username.")
+            logger.info(f"User duplicate attempted: {str(username)}")
+            return render(request, 'ui/signup.html', {'code':code,  'username':username})
+        except PasswordDoesNotMatchException:
+            messages.error(request, "Password and password confirmation must match! Please try again")
+            return render(request, 'ui/signup.html', {'code':code,  'username':username})
         except Exception as e:
-            messages.error(request, f"Problem with your password: {str(e)}") # TODO catch more specific error
-            print("pwd issue")
-            return render(request, 'ui/signup.html', {'code':code, 'username':username})
-        
-        
-        if not pwd or not pwd_conf or pwd != pwd_conf:
-            messages.error(request, "Passwords must match! Please try again")
+            logger.critical(str(e))
+            messages.error(request, "Unable to create account.")
             return render(request, 'ui/signup.html', {'code':code,  'username':username})
 
-        try:
-            if User.objects.filter(username__iexact=username).exists():            
-                messages.error(request, "This user already exists! Either login, or try again with a different username.")
-                return render(request, 'ui/signup.html', {'code':code,  'username':username})
-        except User.DoesNotExist:
-            pass
-
-        u = User(username=username)
-        u.set_password(pwd)
-        u.save()        
-
-        new_user = authenticate(request, username=username, password=pwd)
-
-        if new_user is not None:
-            if activation_code.one_time_use:
-                activation_code.force_invalidate()
-            login(request, new_user)
-            messages.success(request, "Thank you for signing up!")
-            return redirect("ui:home")
-        else:
-            return redirect("ui:login")
 
 class PasswordView(LoginRequiredMixin, View):
+    '''
+    View to change password
+    '''
     def get(self, request):
         return render(request, 'ui/password.html')
 
@@ -121,17 +113,20 @@ class PasswordView(LoginRequiredMixin, View):
         pwd_conf = request.POST['p2']
 
         this_user = authenticate(request, username=request.user.username, password=old_pwd)
+        
         if not this_user:
             messages.error(request, "Your old password was incorrect")
             return render(request, 'ui/password.html')
 
         try:
-            validators.validate_password(password=pwd, user=User)
+            Helpers.validate_password(pwd=pwd)
         except Exception as e:
             messages.error(request, f"There was a problem with your password: {str(e)}. Please try again.")
             return render(request, 'ui/password.html')
 
-        if not pwd or not pwd_conf or pwd != pwd_conf:
+        try:
+            Helpers.compare_passwords(pwd, pwd_conf)
+        except PasswordDoesNotMatchException:
             messages.error(request, 'Passwords must match! Please Try again')
             return render(request, 'ui/password.html')
 
@@ -151,23 +146,22 @@ class PasswordView(LoginRequiredMixin, View):
             return redirect("ui:login")
 
 class LogoutView(LoginRequiredMixin, View):
+    '''
+    Logout View
+    '''
     def get(self, request):
         logout(request)
         return redirect("ui:login")
 
-class ActivationCodesView(LoginRequiredMixin, View):
-    def get(self, request):
-        if request.user.is_superuser:
-            # codes = ActivationCode.objects.all().order_by("-expiration_timestamp")
-            codes = ActivationCode.objects.all().order_by("-pk")
-            return render(request, "ui/codes.html", {"codes":codes})
-        else:
-            return HttpResponseForbidden()
-
+class ActivationCodesView(SuperUserView):
+    '''
+    Activation Code view (create/view codes). Requires Superuser
+    '''
+    def get(self, request):        
+        codes = ActivationCode.objects.all().order_by("-expiration_timestamp")
+        return render(request, "ui/codes.html", {"codes":codes})
+        
     def post(self, request):
-        if not request.user.is_superuser:
-            return HttpResponseForbidden()
-
         hours = int(request.POST['hours'])
         if hours < 1 or hours > 8760:
             messages.error(request, "Hours must be between 1 and 8760")
@@ -177,9 +171,10 @@ class ActivationCodesView(LoginRequiredMixin, View):
         messages.success(request,"Code Created!")
         return redirect("ui:codes")
 
-class ClearOldActivationCodesView(LoginRequiredMixin, View):
+class ClearOldActivationCodesView(SuperUserView):
+    '''
+    Delete Activation Codes View. Requires Supersuser.
+    '''
     def post(self, request):
-        if not request.user.is_superuser:
-            return HttpResponseForbidden()
         call_command("clear_old_codes", confirm=True)
         return redirect("ui:codes")

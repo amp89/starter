@@ -1,5 +1,5 @@
 """
-ASGI config for custom_sched project.
+ASGI config for this_project project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'custom_sched.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'this_project.settings')
 
 application = get_asgi_application()

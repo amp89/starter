@@ -5,6 +5,9 @@
 {% block inner_content %}
 
             <h5 class="card-title text-center">Sign Up</h5>
+            <small>
+              <a href="{% url 'ui:login' %}">Have an account? Login here.</a>
+            </small>
             <form class="form-signin" action="{{ code.get_link }}", method="POST">
             {% csrf_token %}
             <input type="hidden" name="code" value="{{code}}">
