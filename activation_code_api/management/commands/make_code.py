@@ -1,5 +1,4 @@
 from django.core.management.base import BaseCommand, CommandError
-import requests
 from activation_code_api.models import ActivationCode
 import json
 import time
